@@ -22,6 +22,9 @@ const submitDataset = document.getElementById("submitDataset");
 const voiceGuidance = document.getElementById("voiceGuidance");
 const studentSession = document.getElementById("studentSession");
 const registeredUSN = (localStorage.getItem("registeredUSN") || "").trim().toUpperCase();
+const API_BASE_URL = window.location.port === "5500"
+    ? "http://127.0.0.1:8000"
+    : "";
 
 const poseSteps = ["RIGHT", "LEFT", "UP", "DOWN", "FRONT", "BLINK"];
 const imagesPerPose = 3;
@@ -44,6 +47,7 @@ let captureRevision = 0;
 let faceMissingSince = null;
 let stepStartedAt = performance.now();
 let stepHintShown = false;
+let browserSupabasePromise = null;
 const faceLossResetDelayMs = 1000;
 const stepHintDelayMs = 6000;
 
@@ -201,31 +205,58 @@ async function submitStudentDataset() {
         return;
     }
 
-    const formData = new FormData();
-    capturedImages.forEach((file) => formData.append("files", file));
     isUploading = true;
     submitDataset.disabled = true;
     restartButton.disabled = true;
-    poseInstruction.textContent = "Uploading your face dataset...";
+    poseInstruction.textContent = "Preparing secure image uploads...";
 
     try {
-        const response = await fetch(
-            `https://dataset-collection-using-ai-model.onrender.com/upload-dataset/${encodeURIComponent(registeredUSN)}`,
-            { method: "POST", body: formData }
+        const sessionResponse = await fetch(
+            `${API_BASE_URL}/upload-dataset/${encodeURIComponent(registeredUSN)}`,
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ filenames: capturedImages.map((file) => file.name) })
+            }
         );
-        const result = await response.json();
-        if (!response.ok) {
-            const detail = result.detail;
-            const message = typeof detail === "string"
-                ? detail
-                : detail?.message
-                    ? `${detail.message} Matched student: ${detail.matched_student} (similarity ${Number(detail.similarity).toFixed(3)}).`
-                    : "Dataset upload failed.";
-            throw new Error(message);
+        const uploadSession = await sessionResponse.json();
+        if (!sessionResponse.ok) {
+            throw new Error(uploadSession.detail || "Could not prepare secure image uploads.");
+        }
+
+        const supabase = await getBrowserSupabaseClient();
+        const filesByName = new Map(capturedImages.map((file) => [file.name, file]));
+
+        for (let index = 0; index < uploadSession.uploads.length; index++) {
+            const upload = uploadSession.uploads[index];
+            const file = filesByName.get(upload.filename);
+            if (!file) throw new Error(`Missing captured image: ${upload.filename}`);
+
+            poseInstruction.textContent =
+                `Uploading image ${index + 1}/${uploadSession.uploads.length}...`;
+
+            const { error } = await supabase.storage
+                .from(uploadSession.bucket)
+                .uploadToSignedUrl(upload.path, upload.token, file, {
+                    contentType: file.type || "image/jpeg",
+                    upsert: true
+                });
+
+            if (error) throw new Error(`Could not upload ${upload.filename}: ${error.message}`);
+        }
+
+        poseInstruction.textContent = "Confirming all images were saved...";
+        const completeResponse = await fetch(
+            `${API_BASE_URL}/upload-dataset/${encodeURIComponent(registeredUSN)}/complete`,
+            { method: "POST" }
+        );
+        const result = await completeResponse.json();
+        if (!completeResponse.ok) {
+            throw new Error(result.detail || "Dataset upload could not be confirmed.");
         }
 
         stopCamera(false);
-        poseInstruction.textContent = "Dataset uploaded successfully!";
+        poseInstruction.textContent = "Dataset uploaded successfully; face processing is pending.";
         cameraMessage.textContent = `${result.image_count} images saved for ${result.usn}.`;
         submitDataset.disabled = true;
     } catch (error) {
@@ -235,6 +266,23 @@ async function submitStudentDataset() {
         isUploading = false;
         restartButton.disabled = false;
     }
+}
+
+async function getBrowserSupabaseClient() {
+    if (!browserSupabasePromise) {
+        browserSupabasePromise = (async () => {
+            const response = await fetch(`${API_BASE_URL}/public-config`);
+            const config = await response.json();
+            if (!response.ok) {
+                throw new Error(config.detail || "Supabase browser configuration is unavailable.");
+            }
+
+            const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
+            return createClient(config.supabase_url, config.supabase_publishable_key);
+        })();
+    }
+
+    return browserSupabasePromise;
 }
 
 function speakInstruction(step) {

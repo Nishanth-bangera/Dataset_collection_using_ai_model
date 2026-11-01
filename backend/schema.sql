@@ -18,8 +18,13 @@ CREATE TABLE IF NOT EXISTS face_datasets (
     usn         TEXT REFERENCES students(usn) ON DELETE CASCADE,
     image_count INT DEFAULT 15,
     zip_path    TEXT,
+    processing_status TEXT NOT NULL DEFAULT 'pending',
     uploaded_at TIMESTAMPTZ DEFAULT now()
 );
+
+-- Add the processing state when upgrading an existing project.
+ALTER TABLE public.face_datasets
+ADD COLUMN IF NOT EXISTS processing_status TEXT NOT NULL DEFAULT 'pending';
 
 -- 3. Attendance records
 --    usn + date is UNIQUE so a student can only be marked once per day.

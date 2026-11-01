@@ -1,0 +1,14 @@
+.env
+venv/
+.venv/
+node_modules/
+student_datasets/
+package.json
+package-lock.json
+backend/main.py
+backend/face_processing.py
+backend/embedding_manager.py
+backend/attendance.py
+backend/requirements.txt
+backend/requirement.txt
+backend/requirements-processing.txt

@@ -8,7 +8,7 @@ if (-not (Test-Path -LiteralPath $projectPython)) {
 
 Push-Location $projectRoot
 try {
-    & $projectPython -m uvicorn backend.main:app --reload --app-dir $projectRoot
+    & $projectPython -m uvicorn app:app --reload --app-dir $projectRoot
     exit $LASTEXITCODE
 }
 finally {

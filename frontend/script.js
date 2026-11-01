@@ -2,6 +2,9 @@
 const form = document.getElementById("registrationForm");
 const message = document.getElementById("message");
 const submitBtn = document.getElementById("submitBtn");
+const API_BASE_URL = window.location.port === "5500"
+    ? "http://127.0.0.1:8000"
+    : "";
 
 form.addEventListener("submit", async function(event) {
     event.preventDefault();
@@ -18,7 +21,7 @@ form.addEventListener("submit", async function(event) {
 
     try {
         const response = await fetch(
-            "https://dataset-collection-using-ai-model.onrender.com/register",
+            `${API_BASE_URL}/register`,
             {
                 method: "POST",
                 headers: {

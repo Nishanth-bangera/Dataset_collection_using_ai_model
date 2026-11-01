@@ -24,6 +24,7 @@ env/
 *.egg-info/
 dist/
 build/
+node_modules/
 
 # ── OS files ──────────────────────────────────────────────────────────────────
 .DS_Store

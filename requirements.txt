@@ -1,10 +1,5 @@
-fastapi
-uvicorn[standard]
-python-multipart
-opencv-python-headless
-numpy
-insightface
-onnxruntime
+fastapi>=0.138.0
+uvicorn
 supabase
 python-dotenv
 email-validator

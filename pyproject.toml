@@ -1,0 +1,5 @@
+[tool.vercel]
+entrypoint = "app:app"
+
+[tool.vercel.fastapi.static]
+exclude = true
