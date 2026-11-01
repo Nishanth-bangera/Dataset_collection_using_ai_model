@@ -53,7 +53,11 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Tighten in production
+    allow_origins=[
+        "http://127.0.0.1:5500",
+        "http://localhost:5500",
+        "https://dataset-collection-using-ai-model-1.onrender.com",
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -126,11 +130,8 @@ def register_student(student: Student):
     email  = str(student.email).strip().lower()
     mobile = student.mobile.strip()
 
-    # Validation
-    if not name:
-        raise HTTPException(status_code=400, detail="Name cannot be empty")
-    if not re.fullmatch(r"[A-Z0-9]+", usn):
-        raise HTTPException(status_code=400, detail="Invalid USN format")
+    # Keep name and USN format flexible. USN is still required by the request
+    # model and database, and database uniqueness prevents duplicate USNs.
     if not re.fullmatch(r"\d{10}", mobile):
         raise HTTPException(status_code=400, detail="Mobile number must contain exactly 10 digits")
 
