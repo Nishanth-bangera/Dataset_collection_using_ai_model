@@ -7,3 +7,4 @@ insightface
 onnxruntime
 supabase
 python-dotenv
+email-validator
