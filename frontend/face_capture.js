@@ -210,7 +210,7 @@ async function submitStudentDataset() {
 
     try {
         const response = await fetch(
-            `http://127.0.0.1:8000/upload-dataset/${encodeURIComponent(registeredUSN)}`,
+            `https://dataset-collection-using-ai-model.onrender.com/upload-dataset/${encodeURIComponent(registeredUSN)}`,
             { method: "POST", body: formData }
         );
         const result = await response.json();
