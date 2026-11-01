@@ -2,8 +2,8 @@
 
 ## Vercel deployment
 
-This repository is configured as one Vercel FastAPI project. The FastAPI app
-serves the `frontend/` files on the same origin and exposes registration and
+This repository is configured as one Vercel FastAPI project. The root
+`vercel_api.py` entry point serves the `frontend/` files on the same origin and exposes registration and
 dataset-upload endpoints. Face embeddings are intentionally not generated in
 the Vercel function; dataset images are uploaded directly to the private
 Supabase Storage bucket using short-lived signed upload tokens.
