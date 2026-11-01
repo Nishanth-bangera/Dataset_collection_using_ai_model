@@ -1,0 +1,187 @@
+﻿* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #eef2f7;
+    padding: 25px;
+}
+
+.container {
+    max-width: 650px;
+    margin: auto;
+    background: white;
+    padding: 25px;
+    border-radius: 15px;
+    text-align: center;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+}
+
+h1 {
+    color: #173b70;
+}
+
+h2 {
+    color: #555;
+}
+
+.camera-box {
+    position: relative;
+    background: #111;
+    width: 100%;
+    max-width: 500px;
+    margin: 20px auto;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+video {
+    display: block;
+    width: 100%;
+    min-height: 280px;
+    object-fit: cover;
+    transform: scaleX(-1);
+}
+
+.camera-message {
+    position: absolute;
+    bottom: 10px;
+    left: 0;
+    right: 0;
+    color: white;
+    background: rgba(0,0,0,0.6);
+    padding: 10px;
+}
+
+.status-box {
+    background: #f4f7fb;
+    padding: 15px;
+    border-radius: 10px;
+    margin-top: 20px;
+}
+
+.status-box p {
+    font-weight: bold;
+}
+
+.instruction-command {
+    margin: 4px 0 14px;
+    padding: 12px 10px;
+    border: 2px solid #f0b429;
+    border-radius: 10px;
+    background: #fff4cc;
+    color: #173b70;
+    font-size: clamp(1.2rem, 4vw, 1.65rem);
+    line-height: 1.2;
+    text-transform: uppercase;
+}
+
+.instruction-command.is-hint {
+    border-color: #c2410c;
+    background: #ffedd5;
+    color: #7c2d12;
+    box-shadow: 0 0 0 3px rgba(194, 65, 12, 0.14);
+}
+
+.voice-setting {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 14px;
+    color: #475467;
+}
+
+.voice-setting input {
+    width: 18px;
+    height: 18px;
+}
+
+.buttons {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+.progress-track {
+    width: 100%;
+    height: 12px;
+    margin-top: 18px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: #dce3ed;
+}
+
+.progress-fill {
+    width: 0;
+    height: 100%;
+    border-radius: inherit;
+    background: #2c8a55;
+    transition: width 180ms ease;
+}
+
+.submit-button {
+    margin-top: 14px;
+    background: #2c8a55;
+}
+
+.student-session {
+    color: #475467;
+    font-weight: bold;
+}
+
+.pose-status-list {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin: 16px 0 8px;
+}
+
+.pose-status {
+    margin: 0;
+    padding: 10px 6px;
+    border: 2px solid #98a2b3;
+    background: #e4e7ec;
+    color: #344054;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: default;
+}
+
+.pose-status.is-active {
+    border-color: #b42318;
+    background: #fee4e2;
+    color: #912018;
+}
+
+.pose-status.is-detected,
+.pose-status.is-complete {
+    border-color: #039855;
+    background: #d1fadf;
+    color: #05603a;
+}
+
+button {
+    padding: 12px 20px;
+    border: none;
+    border-radius: 7px;
+    background: #173b70;
+    color: white;
+    cursor: pointer;
+}
+
+button:disabled {
+    background: #999;
+    cursor: not-allowed;
+}
+
+#restartCapture {
+    background: #a45b13;
+}
+
+.note {
+    color: #777;
+    font-size: 13px;
+}

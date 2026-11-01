@@ -1,0 +1,88 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Face Dataset Collection</title>
+    <link rel="stylesheet" href="face_capture.css">
+</head>
+
+<body>
+
+    <div class="container">
+
+        <h1>AI Attendance System</h1>
+        <h2>Face Dataset Collection</h2>
+        <p id="studentSession" class="student-session"></p>
+
+        <div class="camera-box">
+
+            <video id="video" autoplay playsinline muted></video>
+
+            <div class="camera-message" id="cameraMessage">
+                Camera is not started
+            </div>
+
+        </div>
+
+        <div class="status-box">
+
+            <h3 id="instruction" class="instruction-command" aria-live="polite" aria-atomic="true">
+                Click Start Camera
+            </h3>
+
+            <p id="faceStatus">Face: Not detected</p>
+
+            <p id="lightStatus">Lighting: Not checked</p>
+
+            <p id="blurStatus">Image clarity: Not checked</p>
+
+            <div class="pose-status-list" aria-label="Pose capture status">
+                <button type="button" class="pose-status" data-pose="RIGHT" disabled>RIGHT</button>
+                <button type="button" class="pose-status" data-pose="LEFT" disabled>LEFT</button>
+                <button type="button" class="pose-status" data-pose="UP" disabled>UP</button>
+                <button type="button" class="pose-status" data-pose="DOWN" disabled>DOWN</button>
+                <button type="button" class="pose-status" data-pose="FRONT" disabled>FRONT</button>
+                <button type="button" class="pose-status" data-pose="BLINK" disabled>BLINK</button>
+            </div>
+
+            <div class="progress-track" role="progressbar" aria-label="Capture instructions" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                <div id="progressFill" class="progress-fill"></div>
+            </div>
+            <p id="progressText">0% Completed</p>
+
+        </div>
+
+        <label class="voice-setting">
+            <input id="voiceGuidance" type="checkbox" checked>
+            Speak capture instructions
+        </label>
+
+        <div class="buttons">
+
+            <button id="startCamera">
+                Start Camera
+            </button>
+
+            <button id="stopCamera" disabled>
+                Stop Camera
+            </button>
+
+            <button id="restartCapture" type="button">
+                Restart capture
+            </button>
+
+        </div>
+
+        <button id="submitDataset" class="submit-button" disabled>Upload face dataset</button>
+
+        <p class="note">
+            Keep one face in frame with good lighting. The five head poses save three images each; blinking is a liveness step and is not saved as a pose image.
+        </p>
+
+    </div>
+
+    <script type="module" src="face_capture.js"></script>
+
+</body>
+</html>
