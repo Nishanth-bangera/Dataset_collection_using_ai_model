@@ -1,2 +1,14 @@
+[project]
+name = "dataset-collection-ai"
+version = "1.0.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.138.0",
+    "uvicorn",
+    "supabase",
+    "python-dotenv",
+    "email-validator"
+]
+
 [tool.vercel]
 entrypoint = "vercel_api:app"
