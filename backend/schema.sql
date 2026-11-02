@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS students (
 CREATE TABLE IF NOT EXISTS face_datasets (
     id          BIGSERIAL PRIMARY KEY,
     usn         TEXT REFERENCES students(usn) ON DELETE CASCADE,
-    image_count INT DEFAULT 15,
+    image_count INT DEFAULT 5,
     zip_path    TEXT,
     processing_status TEXT NOT NULL DEFAULT 'pending',
     uploaded_at TIMESTAMPTZ DEFAULT now()

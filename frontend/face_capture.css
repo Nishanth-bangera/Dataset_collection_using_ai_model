@@ -98,6 +98,22 @@ video {
     height: 18px;
 }
 
+.camera-setting {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin: 14px 0 0 12px;
+    color: #475467;
+}
+
+.camera-setting select {
+    min-height: 40px;
+    padding: 6px 10px;
+    border: 1px solid #98a2b3;
+    border-radius: 7px;
+    background: white;
+}
+
 .buttons {
     display: flex;
     gap: 12px;
@@ -175,6 +191,18 @@ button {
 button:disabled {
     background: #999;
     cursor: not-allowed;
+}
+
+.pose-status:not(:disabled) { min-height: 44px; }
+
+@media (max-width: 600px) {
+    body { padding: 10px; }
+    .container { padding: 16px 12px; }
+    .camera-box { margin: 14px auto; }
+    video { min-height: 0; aspect-ratio: 4 / 3; max-height: 52vh; }
+    .buttons { flex-wrap: wrap; }
+    .buttons button, .submit-button { min-height: 48px; }
+    .status-box { padding: 12px 9px; }
 }
 
 #restartCapture {

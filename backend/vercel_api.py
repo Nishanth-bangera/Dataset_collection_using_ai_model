@@ -18,12 +18,8 @@ from storage3.types import CreateSignedUploadUrlOptions
 from .database import get_supabase
 
 STORAGE_BUCKET = "face-datasets"
-POSES = ("right", "left", "up", "down", "front")
-EXPECTED_FILENAMES = {
-    f"{pose}_{index}.jpg"
-    for pose in POSES
-    for index in range(1, 4)
-}
+POSES = ("front", "left", "right", "up", "down")
+EXPECTED_FILENAMES = {f"{pose}.jpg" for pose in POSES}
 
 app = FastAPI(
     title="AI Attendance System",
@@ -182,8 +178,8 @@ def create_dataset_upload_urls(usn: str, request: DatasetUploadRequest):
     """Issue one-time upload tokens; image bytes go straight from browser to Storage."""
     usn = _normalized_usn(usn)
     filenames = request.filenames
-    if len(filenames) != 15 or len(set(filenames)) != 15 or set(filenames) != EXPECTED_FILENAMES:
-        raise HTTPException(status_code=400, detail="Exactly the 15 expected pose images are required")
+    if len(filenames) != 5 or len(set(filenames)) != 5 or set(filenames) != EXPECTED_FILENAMES:
+        raise HTTPException(status_code=400, detail="Exactly one image for each of the five poses is required")
 
     db = get_supabase()
     try:
@@ -223,16 +219,17 @@ def complete_dataset_upload(usn: str):
 
         stored_files = db.storage.from_(STORAGE_BUCKET).list(f"{folder}/images") or []
         stored_names = {item.get("name") for item in stored_files if item.get("name")}
-        if stored_names != EXPECTED_FILENAMES:
+        missing_names = EXPECTED_FILENAMES - stored_names
+        if missing_names:
             raise HTTPException(
                 status_code=400,
-                detail=f"Storage contains {len(stored_names)} of the 15 expected images; upload is incomplete",
+                detail=f"Storage is missing required images: {', '.join(sorted(missing_names))}",
             )
 
         db.table("face_datasets").insert(
             {
                 "usn": usn,
-                "image_count": 15,
+                "image_count": 5,
                 "zip_path": None,
                 "processing_status": "pending",
             }
@@ -249,7 +246,7 @@ def complete_dataset_upload(usn: str):
     return {
         "message": "Images uploaded successfully; face processing is pending",
         "usn": usn,
-        "image_count": 15,
+        "image_count": 5,
         "processing_status": "pending",
     }
 

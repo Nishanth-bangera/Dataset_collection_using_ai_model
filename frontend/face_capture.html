@@ -38,11 +38,11 @@
             <p id="blurStatus">Image clarity: Not checked</p>
 
             <div class="pose-status-list" aria-label="Pose capture status">
-                <button type="button" class="pose-status" data-pose="RIGHT" disabled>RIGHT</button>
-                <button type="button" class="pose-status" data-pose="LEFT" disabled>LEFT</button>
-                <button type="button" class="pose-status" data-pose="UP" disabled>UP</button>
-                <button type="button" class="pose-status" data-pose="DOWN" disabled>DOWN</button>
-                <button type="button" class="pose-status" data-pose="FRONT" disabled>FRONT</button>
+                <button type="button" class="pose-status" data-pose="FRONT">FRONT</button>
+                <button type="button" class="pose-status" data-pose="LEFT">LEFT</button>
+                <button type="button" class="pose-status" data-pose="RIGHT">RIGHT</button>
+                <button type="button" class="pose-status" data-pose="UP">UP</button>
+                <button type="button" class="pose-status" data-pose="DOWN">DOWN</button>
                 <button type="button" class="pose-status" data-pose="BLINK" disabled>BLINK</button>
             </div>
 
@@ -56,6 +56,13 @@
         <label class="voice-setting">
             <input id="voiceGuidance" type="checkbox" checked>
             Speak capture instructions
+        </label>
+
+        <label class="camera-setting" for="cameraFacing">Camera
+            <select id="cameraFacing">
+                <option value="user">Front</option>
+                <option value="environment">Rear</option>
+            </select>
         </label>
 
         <div class="buttons">
@@ -74,10 +81,10 @@
 
         </div>
 
-        <button id="submitDataset" class="submit-button" disabled>Upload face dataset</button>
+        <button id="submitDataset" class="submit-button" disabled>Upload Database</button>
 
         <p class="note">
-            Keep one face in frame with good lighting. The five head poses save three images each; blinking is a liveness step and is not saved as a pose image.
+            Capture one clear image for each pose. Blink once when prompted. Select a completed pose to retake its image.
         </p>
 
     </div>

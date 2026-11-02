@@ -23,7 +23,7 @@ The API and static site share a Vercel origin, so production requests use
 relative paths. For local development, run `run_backend.ps1` and open
 `http://127.0.0.1:8000/`.
 
-The Vercel upload step stores 15 pose images and marks face processing as
+The Vercel upload step stores five pose images (front, left, right, up, down) and marks face processing as
 pending. Embedding generation, duplicate-face review, and attendance need a
 separate processing stage and are not enabled by this lightweight deployment.
 If this project already has the Supabase tables, rerun `backend/schema.sql` in

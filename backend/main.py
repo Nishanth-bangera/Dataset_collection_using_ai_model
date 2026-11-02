@@ -5,7 +5,7 @@ Storage layout in the 'face-datasets' Supabase Storage bucket:
     <USN>/
         student_details.json
         images/
-            right_1.jpg … front_3.jpg   (15 pose images)
+            front.jpg, left.jpg, right.jpg, up.jpg, down.jpg (5 pose images)
         embeddings.npy
         <USN>.zip
 """
@@ -211,15 +211,11 @@ async def upload_dataset(usn: str, files: list[UploadFile] = File(...)):
     except Exception as error:
         raise HTTPException(status_code=503, detail="Supabase Storage is unavailable") from error
 
-    # Exactly the 15 expected pose filenames
-    expected_names = {
-        f"{pose}_{index}.jpg"
-        for pose in ("right", "left", "up", "down", "front")
-        for index in range(1, 4)
-    }
+    # Exactly one image for each required pose.
+    expected_names = {f"{pose}.jpg" for pose in ("front", "left", "right", "up", "down")}
     received_names = [upload.filename for upload in files]
-    if len(files) != 15 or len(set(received_names)) != 15 or set(received_names) != expected_names:
-        raise HTTPException(status_code=400, detail="Exactly the 15 expected pose images are required")
+    if len(files) != 5 or len(set(received_names)) != 5 or set(received_names) != expected_names:
+        raise HTTPException(status_code=400, detail="Exactly one image for each of the five poses is required")
 
     # Read + validate every image before doing any permanent work
     validated_files: list[tuple[str, bytes]] = []
@@ -249,7 +245,7 @@ async def upload_dataset(usn: str, files: list[UploadFile] = File(...)):
                     raise HTTPException(status_code=400, detail=str(error)) from error
 
             embeddings_array = np.asarray(all_embeddings, dtype=np.float32)
-            if embeddings_array.shape[0] != 15:
+            if embeddings_array.shape[0] != 5:
                 raise HTTPException(
                     status_code=400,
                     detail="Could not generate a face embedding for every image",
@@ -318,7 +314,7 @@ async def upload_dataset(usn: str, files: list[UploadFile] = File(...)):
         # 4. Log to face_datasets table
         get_supabase().table("face_datasets").insert({
             "usn":         usn,
-            "image_count": 15,
+            "image_count": 5,
             "zip_path":    f"{usn}/{usn}.zip",
         }).execute()
 
@@ -335,7 +331,7 @@ async def upload_dataset(usn: str, files: list[UploadFile] = File(...)):
     return {
         "message":     "Dataset uploaded successfully",
         "usn":         usn,
-        "image_count": 15,
+        "image_count": 5,
         "zip_file":    f"{STORAGE_BUCKET}/{usn}/{usn}.zip",
     }
 
