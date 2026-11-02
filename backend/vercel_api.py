@@ -7,6 +7,7 @@ module so the Vercel function does not need OpenCV, NumPy, InsightFace, or ONNX.
 import json
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import quote
 
 from fastapi import FastAPI, HTTPException
@@ -133,14 +134,9 @@ def register_student(student: Student):
         raise HTTPException(status_code=400, detail="Mobile number must contain exactly 10 digits")
 
     db = get_supabase()
-    try:
-        if _student_exists(usn):
-            raise HTTPException(status_code=409, detail="A student with this USN is already registered")
-    except HTTPException:
-        raise
-    except Exception as error:
-        raise HTTPException(status_code=503, detail="Supabase is unavailable") from error
-
+    # Rely on the students table's unique constraints instead of doing a
+    # separate existence query before the insert. This removes one round trip;
+    # the insert below still handles duplicate USNs/emails/mobiles safely.
     try:
         db.table("students").insert(
             {"name": name, "usn": usn, "email": email, "mobile": mobile}
@@ -190,12 +186,14 @@ def create_dataset_upload_urls(usn: str, request: DatasetUploadRequest):
 
         bucket = db.storage.from_(STORAGE_BUCKET)
         folder = _storage_folder(usn)
-        uploads = []
         options = CreateSignedUploadUrlOptions(upsert="true")
-        for filename in sorted(EXPECTED_FILENAMES):
+        def create_upload(filename: str) -> dict:
             path = f"{folder}/images/{filename}"
             signed = bucket.create_signed_upload_url(path, options)
-            uploads.append({"filename": filename, "path": signed["path"], "token": signed["token"]})
+            return {"filename": filename, "path": signed["path"], "token": signed["token"]}
+
+        with ThreadPoolExecutor(max_workers=len(EXPECTED_FILENAMES)) as executor:
+            uploads = list(executor.map(create_upload, sorted(EXPECTED_FILENAMES)))
     except HTTPException:
         raise
     except Exception as error:

@@ -182,6 +182,8 @@ async function capturePoseImage(position) {
         capturedImages.push(new File([blob], `${position.toLowerCase()}.jpg`, {type:"image/jpeg"}));
         await saveCapturedImages();
         renderProgress();
+        // Load the browser-safe Supabase client while the student completes the remaining poses.
+        void getBrowserSupabaseClient().catch(() => {});
     } finally {
         isCapturing = false;
     }
@@ -221,23 +223,24 @@ async function submitStudentDataset() {
         const supabase = await getBrowserSupabaseClient();
         const filesByName = new Map(capturedImages.map((file) => [file.name, file]));
 
-        for (let index = 0; index < uploadSession.uploads.length; index++) {
-            const upload = uploadSession.uploads[index];
+        if (uploadSession.uploads.length !== 5) throw new Error("The server did not prepare all five image uploads.");
+        let completedUploads = 0;
+        const uploadResults = await Promise.allSettled(uploadSession.uploads.map(async upload => {
             const file = filesByName.get(upload.filename);
             if (!file) throw new Error(`Missing captured image: ${upload.filename}`);
-
-            poseInstruction.textContent =
-                `Uploading student data and face images… ${Math.round(index / uploadSession.uploads.length * 100)}% (${index + 1}/${uploadSession.uploads.length})`;
-
             const { error } = await supabase.storage
                 .from(uploadSession.bucket)
                 .uploadToSignedUrl(upload.path, upload.token, file, {
                     contentType: file.type || "image/jpeg",
                     upsert: true
                 });
-
             if (error) throw new Error(`Could not upload ${upload.filename}: ${error.message}`);
-        }
+        }).map(promise => promise.finally(() => {
+            completedUploads++;
+            poseInstruction.textContent = `Uploading student data and face images… ${Math.round(completedUploads / 5 * 100)}% (${completedUploads}/5)`;
+        })));
+        const failedUpload = uploadResults.find(result => result.status === "rejected");
+        if (failedUpload) throw failedUpload.reason;
 
         poseInstruction.textContent = "Confirming all images were saved...";
         const completeResponse = await fetch(
@@ -334,33 +337,39 @@ async function startCamera() {
             const cameraPromise = navigator.mediaDevices.getUserMedia({
                 video: { facingMode: { ideal: cameraFacing.value || "user" }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false
             }).then(cameraStream => { acquiredStream = cameraStream; return cameraStream; });
-            const [, cameraStream] = await Promise.all([
-                faceLandmarker ? Promise.resolve() : loadFaceModel(),
-                cameraPromise
-            ]);
+            const previewPromise = cameraPromise.then(async cameraStream => {
+                stream = cameraStream;
+                for (const track of cameraStream.getTracks()) {
+                    track.addEventListener("ended", () => {
+                        if (stream !== cameraStream || !running) return;
+                        running = false;
+                        if (detectionFrame !== null) cancelAnimationFrame(detectionFrame);
+                        detectionFrame = null;
+                        stream = null;
+                        video.srcObject = null;
+                        startButton.disabled = false;
+                        stopButton.disabled = true;
+                        cameraMessage.textContent = "Camera interrupted. Progress saved. Start the camera to continue.";
+                    }, {once:true});
+                }
+                video.srcObject = cameraStream;
+                await video.play();
+                running = true;
+                neutralPitch = null;
+                neutralPitchSamples = [];
+                startButton.disabled = true;
+                stopButton.disabled = false;
+                cameraMessage.textContent = "Camera is active; starting face detection…";
+                return cameraStream;
+            });
+            const modelPromise = faceLandmarker ? Promise.resolve() : loadFaceModel();
+            // Avoid an unhandled rejection if camera permission fails before the model load finishes.
+            modelPromise.catch(() => {});
+            const cameraStream = await previewPromise;
+            await modelPromise;
             acquiredStream = cameraStream;
-            stream = cameraStream;
-            for (const track of cameraStream.getTracks()) {
-                track.addEventListener("ended", () => {
-                    if (stream !== cameraStream || !running) return;
-                    running = false;
-                    if (detectionFrame !== null) cancelAnimationFrame(detectionFrame);
-                    detectionFrame = null;
-                    stream = null;
-                    video.srcObject = null;
-                    startButton.disabled = false;
-                    stopButton.disabled = true;
-                    cameraMessage.textContent = "Camera interrupted. Progress saved. Start the camera to continue.";
-                }, {once:true});
-            }
-            video.srcObject = stream;
-            await video.play();
-            running = true;
-            neutralPitch = null;
-            neutralPitchSamples = [];
-            startButton.disabled = true;
-            stopButton.disabled = false;
-            cameraMessage.textContent = "Camera is active";
+            if (!running || stream !== cameraStream) return;
+            cameraMessage.textContent = "Camera and face detection are ready";
             if (currentStep < poseSteps.length) {
                 instruction.textContent = "Look straight";
                 speakInstruction("FRONT");
@@ -557,8 +566,10 @@ function detectHeadPosition(landmarks) {
     const verticalDelta = pitch - (neutralPitch ?? 0.365);
     const poseThreshold = 0.045;
 
-    if (yaw < -0.15) return "LEFT";
-    if (yaw > 0.15) return "RIGHT";
+    // The preview is mirrored for the student; invert camera-space yaw so
+    // physical left/right movement matches the spoken instruction.
+    if (yaw < -0.15) return "RIGHT";
+    if (yaw > 0.15) return "LEFT";
     if (verticalDelta < -poseThreshold) return "UP";
     if (verticalDelta > poseThreshold) return "DOWN";
     return "FRONT";
