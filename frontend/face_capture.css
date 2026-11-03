@@ -213,3 +213,8 @@ button:disabled {
     color: #777;
     font-size: 13px;
 }
+
+.manual-eyes { margin: 14px auto; padding: 14px; border-radius: 10px; background: #eef5ff; max-width: 500px; }
+.manual-eyes p { margin-top: 0; font-weight: 700; }
+.secondary { background: #53657c; margin: 5px; }
+#retryCamera, #signOut { min-height: 46px; }

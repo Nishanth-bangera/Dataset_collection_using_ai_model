@@ -43,7 +43,6 @@
                 <button type="button" class="pose-status" data-pose="RIGHT">RIGHT</button>
                 <button type="button" class="pose-status" data-pose="UP">UP</button>
                 <button type="button" class="pose-status" data-pose="DOWN">DOWN</button>
-                <button type="button" class="pose-status" data-pose="BLINK" disabled>BLINK</button>
             </div>
 
             <div class="progress-track" role="progressbar" aria-label="Capture instructions" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
@@ -81,11 +80,18 @@
 
         </div>
 
+        <div id="manualEyes" class="manual-eyes" hidden>
+            <p>Close your eyes for a moment.</p>
+            <button id="eyesClosed" type="button">I Have Closed My Eyes</button>
+        </div>
+
+        <p id="cameraHelp" class="note">Camera needs permission and a secure connection (HTTPS). If it does not start, allow camera access in your browser settings and retry.</p>
+        <button id="retryCamera" type="button" class="secondary">Retry Camera</button>
+        <button id="signOut" type="button" class="secondary">Sign out and continue later</button>
+
         <button id="submitDataset" class="submit-button" disabled>Upload Database</button>
 
-        <p class="note">
-            Capture one clear image for each pose. Blink once when prompted. Select a completed pose to retake its image.
-        </p>
+        <p class="note">Capture one clear image for each pose. Select a completed pose to retake its image.</p>
 
     </div>
 
