@@ -84,6 +84,50 @@ def _student_exists(usn: str) -> bool:
     return bool(result.data)
 
 
+def _get_student(usn: str) -> dict | None:
+    result = (
+        get_supabase().table("students")
+        .select("name,usn,email,mobile")
+        .eq("usn", usn).limit(1).execute()
+    )
+    return result.data[0] if result.data else None
+
+
+def _stored_images(usn: str) -> set[str]:
+    files = get_supabase().storage.from_(STORAGE_BUCKET).list(
+        f"{_storage_folder(usn)}/images"
+    ) or []
+    return {item.get("name") for item in files if item.get("name")}
+
+
+def _student_result(student: dict, *, existing: bool) -> dict:
+    stored = _stored_images(student["usn"])
+    missing = EXPECTED_FILENAMES - stored
+    return {
+        "student": student["usn"],
+        "name": student["name"],
+        "email": student["email"],
+        "mobile": student.get("mobile"),
+        "existing_student": existing,
+        "dataset_completed": not missing,
+        "missing_images": sorted(missing),
+    }
+
+
+def _ensure_student_details(student: dict) -> None:
+    """Create metadata only when absent; never overwrite an existing student file."""
+    folder = _storage_folder(student["usn"])
+    files = get_supabase().storage.from_(STORAGE_BUCKET).list(folder) or []
+    if any(item.get("name") == "student_details.json" for item in files):
+        return
+    details = {key: student.get(key) for key in ("name", "usn", "email", "mobile")}
+    _storage_upload(
+        f"{folder}/student_details.json",
+        json.dumps(details, indent=2).encode("utf-8"),
+        "application/json",
+    )
+
+
 def _dataset_exists(usn: str) -> bool:
     result = (
         get_supabase()
@@ -134,39 +178,46 @@ def register_student(student: Student):
         raise HTTPException(status_code=400, detail="Mobile number must contain exactly 10 digits")
 
     db = get_supabase()
-    # Rely on the students table's unique constraints instead of doing a
-    # separate existence query before the insert. This removes one round trip;
-    # the insert below still handles duplicate USNs/emails/mobiles safely.
+    existing = _get_student(usn)
+    if existing:
+        same_person = (
+            existing["name"].strip().casefold() == name.casefold()
+            and existing["email"].strip().casefold() == email.casefold()
+            and existing["mobile"].strip() == mobile
+        )
+        if not same_person:
+            raise HTTPException(status_code=409, detail="These details do not match the existing USN")
+        try:
+            _ensure_student_details(existing)
+            return _student_result(existing, existing=True)
+        except Exception as error:
+            raise HTTPException(status_code=503, detail="Your registration exists, but its details file could not be checked") from error
+
     try:
         db.table("students").insert(
             {"name": name, "usn": usn, "email": email, "mobile": mobile}
         ).execute()
     except APIError as error:
         if _is_duplicate_error(error):
-            raise HTTPException(
-                status_code=409,
-                detail="USN, email or mobile number is already registered",
-            ) from error
+            # A simultaneous registration may have won the unique constraint.
+            existing = _get_student(usn)
+            if existing and existing["name"].strip().casefold() == name.casefold() \
+                    and existing["email"].strip().casefold() == email.casefold() \
+                    and existing["mobile"].strip() == mobile:
+                _ensure_student_details(existing)
+                return _student_result(existing, existing=True)
+            raise HTTPException(status_code=409, detail="USN, email or mobile number is already registered") from error
         raise HTTPException(status_code=500, detail="Student registration could not be completed") from error
 
-    details = json.dumps(
-        {"name": name, "usn": usn, "email": email, "mobile": mobile},
-        indent=2,
-    ).encode("utf-8")
-    details_path = f"{_storage_folder(usn)}/student_details.json"
     try:
-        _storage_upload(details_path, details, "application/json")
+        _ensure_student_details({"name": name, "usn": usn, "email": email, "mobile": mobile})
     except Exception as error:
-        try:
-            db.table("students").delete().eq("usn", usn).execute()
-        except Exception:
-            pass
         raise HTTPException(
             status_code=503,
-            detail="Student was not registered because private Storage could not save the details",
+            detail="Registration is saved. Please submit the same details again to retry its details file",
         ) from error
 
-    return {"message": "Student registered successfully", "student": usn, "usn": usn}
+    return _student_result({"name": name, "usn": usn, "email": email, "mobile": mobile}, existing=False)
 
 
 @app.post("/upload-dataset/{usn}")
@@ -181,25 +232,30 @@ def create_dataset_upload_urls(usn: str, request: DatasetUploadRequest):
     try:
         if not _student_exists(usn):
             raise HTTPException(status_code=404, detail="Student is not registered")
-        if _dataset_exists(usn):
-            raise HTTPException(status_code=409, detail="A face dataset already exists for this student")
-
         bucket = db.storage.from_(STORAGE_BUCKET)
         folder = _storage_folder(usn)
         options = CreateSignedUploadUrlOptions(upsert="true")
+        missing = EXPECTED_FILENAMES - _stored_images(usn)
+        if not missing:
+            return {"usn": usn, "bucket": STORAGE_BUCKET, "uploads": [], "already_complete": True}
         def create_upload(filename: str) -> dict:
             path = f"{folder}/images/{filename}"
             signed = bucket.create_signed_upload_url(path, options)
             return {"filename": filename, "path": signed["path"], "token": signed["token"]}
 
-        with ThreadPoolExecutor(max_workers=len(EXPECTED_FILENAMES)) as executor:
-            uploads = list(executor.map(create_upload, sorted(EXPECTED_FILENAMES)))
+        with ThreadPoolExecutor(max_workers=len(missing)) as executor:
+            uploads = list(executor.map(create_upload, sorted(missing)))
     except HTTPException:
         raise
     except Exception as error:
         raise HTTPException(status_code=503, detail="Could not prepare secure image uploads") from error
 
-    return {"usn": usn, "bucket": STORAGE_BUCKET, "uploads": uploads}
+    return {
+        "usn": usn,
+        "bucket": STORAGE_BUCKET,
+        "uploads": uploads,
+        "existing_images": sorted(EXPECTED_FILENAMES - missing),
+    }
 
 
 @app.post("/upload-dataset/{usn}/complete")
@@ -207,16 +263,10 @@ def complete_dataset_upload(usn: str):
     """Confirm all expected objects exist and record that face processing is pending."""
     usn = _normalized_usn(usn)
     db = get_supabase()
-    folder = _storage_folder(usn)
-
     try:
         if not _student_exists(usn):
             raise HTTPException(status_code=404, detail="Student is not registered")
-        if _dataset_exists(usn):
-            raise HTTPException(status_code=409, detail="A face dataset already exists for this student")
-
-        stored_files = db.storage.from_(STORAGE_BUCKET).list(f"{folder}/images") or []
-        stored_names = {item.get("name") for item in stored_files if item.get("name")}
+        stored_names = _stored_images(usn)
         missing_names = EXPECTED_FILENAMES - stored_names
         if missing_names:
             raise HTTPException(
@@ -224,20 +274,17 @@ def complete_dataset_upload(usn: str):
                 detail=f"Storage is missing required images: {', '.join(sorted(missing_names))}",
             )
 
-        db.table("face_datasets").insert(
-            {
-                "usn": usn,
-                "image_count": 5,
-                "zip_path": None,
-                "processing_status": "pending",
-            }
-        ).execute()
+        if not _dataset_exists(usn):
+            db.table("face_datasets").insert(
+                {"usn": usn, "image_count": 5, "zip_path": None, "processing_status": "pending"}
+            ).execute()
     except HTTPException:
         raise
     except APIError as error:
-        if _is_duplicate_error(error):
-            raise HTTPException(status_code=409, detail="A face dataset already exists for this student") from error
-        raise HTTPException(status_code=503, detail="Dataset upload could not be recorded") from error
+        if _is_duplicate_error(error) and _dataset_exists(usn):
+            pass
+        else:
+            raise HTTPException(status_code=503, detail="Dataset upload could not be recorded") from error
     except Exception as error:
         raise HTTPException(status_code=503, detail="Could not verify uploaded images in Storage") from error
 

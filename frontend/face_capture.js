@@ -43,6 +43,7 @@ let eyesWereClosed = false;
 let blinkDetected = false;
 let isCapturing = false;
 let isUploading = false;
+let datasetAlreadyComplete = false;
 let captureRevision = 0;
 let faceMissingSince = null;
 let stepStartedAt = performance.now();
@@ -220,11 +221,20 @@ async function submitStudentDataset() {
             throw new Error(uploadSession.detail || "Could not prepare secure image uploads.");
         }
 
+        if (uploadSession.already_complete) {
+            datasetAlreadyComplete = true;
+            stopCamera(false);
+            poseInstruction.textContent = "Your face data has already been captured and sent to Supabase.";
+            submitDataset.disabled = true;
+            submitDataset.textContent = "Already uploaded";
+            restartButton.disabled = true;
+            return;
+        }
+
         const supabase = await getBrowserSupabaseClient();
         const filesByName = new Map(capturedImages.map((file) => [file.name, file]));
 
-        if (uploadSession.uploads.length !== 5) throw new Error("The server did not prepare all five image uploads.");
-        let completedUploads = 0;
+        let completedUploads = uploadSession.existing_images.length;
         const uploadResults = await Promise.allSettled(uploadSession.uploads.map(async upload => {
             const file = filesByName.get(upload.filename);
             if (!file) throw new Error(`Missing captured image: ${upload.filename}`);
@@ -237,7 +247,7 @@ async function submitStudentDataset() {
             if (error) throw new Error(`Could not upload ${upload.filename}: ${error.message}`);
         }).map(promise => promise.finally(() => {
             completedUploads++;
-            poseInstruction.textContent = `Uploading student data and face images… ${Math.round(completedUploads / 5 * 100)}% (${completedUploads}/5)`;
+            poseInstruction.textContent = `Uploading face images… ${Math.round(completedUploads / 5 * 100)}% (${completedUploads}/5)`;
         })));
         const failedUpload = uploadResults.find(result => result.status === "rejected");
         if (failedUpload) throw failedUpload.reason;
@@ -253,6 +263,7 @@ async function submitStudentDataset() {
         }
 
         stopCamera(false);
+        datasetAlreadyComplete = true;
         poseInstruction.textContent = "Student registration and all 5 face images uploaded successfully!";
         cameraMessage.textContent = `${result.image_count} images saved for ${result.usn}.`;
         submitDataset.disabled = true;
@@ -268,8 +279,8 @@ async function submitStudentDataset() {
         submitDataset.disabled = false;
     } finally {
         isUploading = false;
-        restartButton.disabled = false;
-        submitDataset.textContent = "Upload Database";
+        restartButton.disabled = datasetAlreadyComplete;
+        submitDataset.textContent = datasetAlreadyComplete ? "Already uploaded" : "Upload Database";
     }
 }
 

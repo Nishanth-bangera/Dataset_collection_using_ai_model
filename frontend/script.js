@@ -37,12 +37,18 @@ form.addEventListener("submit", async function(event) {
             throw new Error(result.detail || "Registration failed");
         }
 
-        message.textContent = "Registration successful!";
-        message.style.color = "green";
+        if (result.dataset_completed) {
+            message.textContent = `Your face data has already been captured and sent to Supabase.\nName: ${result.name}\nUSN: ${result.student}\nEmail: ${result.email}\nMobile: ${result.mobile}`;
+            message.style.color = "green";
+            return;
+        }
 
         localStorage.setItem("registeredUSN", result.student);
-        message.textContent = "Registration successful! Opening face capture...";
-        window.location.assign("face_capture.html");
+        message.textContent = result.existing_student
+            ? "Your registration is already saved. Face capture is incomplete, so you can continue now. Opening face capture..."
+            : "Registration successful. Opening face capture...";
+        message.style.color = "green";
+        window.setTimeout(() => window.location.assign("face_capture.html"), 900);
 
     } catch (error) {
         message.textContent = error.message;

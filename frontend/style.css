@@ -67,5 +67,6 @@ button:disabled {
 #message {
     margin-top: 18px;
     font-weight: bold;
+    white-space: pre-line;
 }
 
