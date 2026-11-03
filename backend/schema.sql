@@ -12,17 +12,6 @@ CREATE TABLE IF NOT EXISTS students (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- The registration form only requires name, USN, and email. Existing mobile
--- values are preserved; new registrations may leave this legacy field empty.
-ALTER TABLE public.students ALTER COLUMN mobile DROP NOT NULL;
-
--- Store registration and capture/upload state separately. Defaults are safe for
--- existing student rows; the API reconciles capture/upload values from Storage.
-ALTER TABLE public.students
-    ADD COLUMN IF NOT EXISTS registration_status TEXT NOT NULL DEFAULT 'completed',
-    ADD COLUMN IF NOT EXISTS face_capture_status TEXT NOT NULL DEFAULT 'pending',
-    ADD COLUMN IF NOT EXISTS dataset_upload_status TEXT NOT NULL DEFAULT 'pending';
-
 -- 2. Face dataset upload log
 CREATE TABLE IF NOT EXISTS face_datasets (
     id          BIGSERIAL PRIMARY KEY,
