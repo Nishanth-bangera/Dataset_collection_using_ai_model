@@ -27,7 +27,7 @@ const API_BASE_URL = window.location.port === "5500"
     ? "http://127.0.0.1:8000"
     : "";
 
-const poseSteps = ["FRONT", "LEFT", "RIGHT", "UP", "DOWN", "BLINK"];
+const poseSteps = ["FRONT", "RIGHT", "UP", "LEFT", "DOWN"];
 const capturedImages = [];
 const captureCanvas = document.createElement("canvas");
 const captureContext = captureCanvas.getContext("2d");
@@ -39,16 +39,12 @@ let neutralPitch = null;
 let neutralPitchSamples = [];
 let currentStep = 0;
 let stableFrames = 0;
-let eyesWereClosed = false;
-let blinkDetected = false;
 let isCapturing = false;
 let isUploading = false;
 let datasetAlreadyComplete = false;
 let captureRevision = 0;
 let faceMissingSince = null;
 let stepStartedAt = performance.now();
-let blinkDeadline = 0;
-let blinkRetry = false;
 let browserSupabasePromise = null;
 let cameraStartPromise = null;
 let detectionFrame = null;
@@ -64,7 +60,7 @@ const captureDbPromise = new Promise((resolve, reject) => {
 function saveCapturedImages() {
     return captureDbPromise.then(db => new Promise((resolve, reject) => {
         const tx = db.transaction("sessions", "readwrite");
-        tx.objectStore("sessions").put({images: capturedImages, blinkDetected}, registeredUSN);
+        tx.objectStore("sessions").put({images: capturedImages}, registeredUSN);
         tx.oncomplete = resolve;
         tx.onerror = () => reject(tx.error);
     }));
@@ -81,15 +77,9 @@ async function restoreCapturedImages() {
         });
         const saved = Array.isArray(savedState) ? savedState : (savedState.images || []);
         for (const image of saved) capturedImages.push(image instanceof File ? image : new File([image.blob], image.name, {type:"image/jpeg"}));
-        blinkDetected = Boolean(savedState?.blinkDetected);
-        currentStep = Math.min(capturedImages.length, poseSteps.length - 1);
-        if (blinkDetected && capturedImages.length === 5) currentStep = poseSteps.length;
+        currentStep = Math.min(capturedImages.length, poseSteps.length);
         renderProgress();
         updatePoseIndicators();
-        if (capturedImages.length === 5 && !blinkDetected) {
-            currentStep = 5;
-            instruction.textContent = "Blink once";
-        }
     } catch (error) {
         console.warn("Could not restore saved captures", error);
     }
@@ -99,7 +89,7 @@ function renderProgress() {
     const count = Math.min(capturedImages.length, 5);
     const progress = Math.round(count / 5 * 100);
     progressFill.style.width = `${progress}%`;
-    progressText.textContent = `${count}/5 images${count === 5 ? " · Liveness check" : ""}`;
+    progressText.textContent = `${count}/5 images`;
     progressTrack.setAttribute("aria-valuenow", String(progress));
     submitDataset.disabled = count !== 5 || currentStep !== poseSteps.length;
 }
@@ -115,14 +105,11 @@ function resetCaptureProgress() {
     captureRevision++;
     currentStep = 0;
     stableFrames = 0;
-    eyesWereClosed = false;
-    blinkDetected = false;
     capturedImages.length = 0;
     isCapturing = false;
     neutralPitch = null;
     neutralPitchSamples = [];
     stepStartedAt = performance.now();
-    blinkDeadline = 0;
     instruction.classList.remove("is-hint");
     progressFill.style.width = "0%";
     progressText.textContent = "0% Completed";
@@ -196,8 +183,8 @@ async function submitStudentDataset() {
         poseInstruction.textContent = "Register a student before uploading a dataset.";
         return;
     }
-    if (capturedImages.length !== 5 || currentStep !== poseSteps.length || !blinkDetected) {
-        poseInstruction.textContent = "Complete all five poses and the blink check first.";
+    if (capturedImages.length !== 5 || currentStep !== poseSteps.length) {
+        poseInstruction.textContent = "Complete all five poses first.";
         return;
     }
 
@@ -304,7 +291,7 @@ async function getBrowserSupabaseClient() {
 function speakInstruction(step) {
     if (!voiceGuidance.checked || !("speechSynthesis" in window)) return;
 
-    const phrases = { RIGHT: "Move right", LEFT: "Move left", UP: "Look up", DOWN: "Look down", FRONT: "Look straight", BLINK: "Blink once" };
+    const phrases = { RIGHT: "Move right", LEFT: "Move left", UP: "Look up", DOWN: "Look down", FRONT: "Look straight" };
     const phrase = phrases[step];
     if (!phrase) return;
 
@@ -564,7 +551,7 @@ function calibrateNeutralPitch(landmarks) {
     neutralPitch = sorted[Math.floor(sorted.length / 2)];
     neutralPitchSamples = [];
     const expected = poseSteps[currentStep];
-    instruction.textContent = expected === "BLINK" ? "Blink once" : ({FRONT:"Look straight",LEFT:"Move left",RIGHT:"Move right",UP:"Look up",DOWN:"Look down"}[expected]);
+    instruction.textContent = ({FRONT:"Look straight",LEFT:"Move left",RIGHT:"Move right",UP:"Look up",DOWN:"Look down"}[expected]);
     if (expected && lastSpokenStep !== expected) {
         speakInstruction(expected);
         lastSpokenStep = expected;
@@ -599,47 +586,13 @@ function calculateEAR(landmarks, eye) {
     return horizontal === 0 ? 0 : (vertical1 + vertical2) / (2 * horizontal);
 }
 
-function detectBlink(landmarks) {
-    const leftEAR = calculateEAR(landmarks, [33, 160, 158, 133, 153, 144]);
-    const rightEAR = calculateEAR(landmarks, [362, 385, 387, 263, 373, 380]);
-    const averageEAR = (leftEAR + rightEAR) / 2;
-
-    if (averageEAR < 0.19) {
-        eyesWereClosed = true;
-        return false;
-    }
-
-    if (eyesWereClosed && averageEAR > 0.24) {
-        eyesWereClosed = false;
-        blinkDetected = true;
-        return true;
-    }
-
-    return false;
-}
-
 async function updateProgress(position) {
     if (currentStep >= poseSteps.length || isCapturing || isUploading) return;
 
     const expected = poseSteps[currentStep];
     let completed = false;
 
-    if (expected === "BLINK") {
-        if (!blinkDeadline) {
-            blinkDeadline = performance.now() + 15000;
-            eyesWereClosed = false;
-        }
-        poseInstruction.textContent = blinkRetry ? "Blink not detected. Try blinking once again." : "Blink once";
-        if (detectBlink(position)) { completed = true; blinkRetry = false; }
-        else if (performance.now() > blinkDeadline) {
-            eyesWereClosed = false;
-            blinkDeadline = performance.now() + 15000;
-            blinkRetry = true;
-            poseInstruction.textContent = "Blink not detected. Try blinking once again.";
-            speakInstruction("BLINK");
-        }
-        updatePoseIndicators(expected, completed);
-    } else if (position === expected) {
+    if (position === expected) {
         instruction.classList.remove("is-hint");
         stableFrames++;
         poseInstruction.textContent = `Hold still… ${Math.min(stableFrames, 8)}/8`;
@@ -652,19 +605,16 @@ async function updateProgress(position) {
     }
 
     if (completed) {
-        if (expected !== "BLINK") {
-            try {
-                await capturePoseImage(expected);
-            } catch (error) {
-                stableFrames = 0;
-                updatePoseIndicators(expected, false);
-                poseInstruction.textContent = error.message || "Capture failed. Please try the pose again.";
-                return;
-            }
+        try {
+            await capturePoseImage(expected);
+        } catch (error) {
+            stableFrames = 0;
+            updatePoseIndicators(expected, false);
+            poseInstruction.textContent = error.message || "Capture failed. Please try the pose again.";
+            return;
         }
 
         currentStep++;
-        if (expected === "BLINK") await saveCapturedImages();
         stableFrames = 0;
         stepStartedAt = performance.now();
         instruction.classList.remove("is-hint");
@@ -672,11 +622,11 @@ async function updateProgress(position) {
         renderProgress();
 
         if (currentStep === poseSteps.length) {
-            poseInstruction.textContent = "All five images captured. Blink once.";
-            submitDataset.disabled = capturedImages.length !== 5 || !blinkDetected;
+            poseInstruction.textContent = "All five images captured. You can upload the database.";
+            submitDataset.disabled = capturedImages.length !== 5;
         } else {
             const next = poseSteps[currentStep];
-            poseInstruction.textContent = next === "BLINK" ? "Blink once" : ({FRONT:"Look straight",LEFT:"Move left",RIGHT:"Move right",UP:"Look up",DOWN:"Look down"}[next]);
+            poseInstruction.textContent = ({FRONT:"Look straight",LEFT:"Move left",RIGHT:"Move right",UP:"Look up",DOWN:"Look down"}[next]);
             if (next !== lastSpokenStep) { speakInstruction(next); lastSpokenStep = next; }
         }
     }
@@ -728,12 +678,8 @@ function detectFace() {
                 if (neutralPitch === null && currentStep < 5) {
                     calibrateNeutralPitch(faces[0]);
                 } else {
-                    if (poseSteps[currentStep] === "BLINK") {
-                        updateProgress(faces[0]);
-                    } else {
-                        const position = detectHeadPosition(faces[0]);
-                        updateProgress(position);
-                    }
+                    const position = detectHeadPosition(faces[0]);
+                    updateProgress(position);
                 }
 
             } else {
@@ -817,8 +763,6 @@ document.querySelectorAll(".pose-status[data-pose]").forEach((button) => {
         if (index < 0 || index >= capturedImages.length || isUploading || isCapturing) return;
         capturedImages.length = index;
         currentStep = index;
-        blinkDetected = false;
-        blinkRetry = false;
         stableFrames = 0;
         await saveCapturedImages();
         renderProgress();
